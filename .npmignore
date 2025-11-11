@@ -1,5 +1,6 @@
 .vscode/
 .gitattributes
+.github/
 src/
 tests/
 tsconfig*.json
