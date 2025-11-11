@@ -13,7 +13,6 @@
         "build": "tsc",
         "prepack": "pnpm build",
         "test": "vitest",
-        "test:js-resolve": "node tests/jsResolve.js",
         "test:ui": "vitest --ui",
         "clean": "rimraf -g dist rt-stream-*.tgz"
     },
@@ -24,8 +23,5 @@
         "tsx": "^4.20.6",
         "typescript": "^5.9.3",
         "vitest": "^3.2.4"
-    },
-    "dependencies": {
-        "rt-stream": "link:"
     }
 }

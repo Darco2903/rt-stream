@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      rt-stream:
-        specifier: 'link:'
-        version: 'link:'
     devDependencies:
       '@types/node':
         specifier: ^24.7.2
