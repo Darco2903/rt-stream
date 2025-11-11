@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "declaration": true,
+        "target": "ES2020",
+        "module": "nodenext",
+        "outDir": "dist",
+        "rootDir": "src",
+        "esModuleInterop": true,
+        "strict": true,
+        "moduleResolution": "nodenext",
+        "resolveJsonModule": true
+    },
+    "include": ["src"]
+}

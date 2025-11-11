@@ -1,15 +1,31 @@
 {
     "name": "rt-stream",
     "version": "0.1.0",
-    "description": "Real Time Stream",
     "author": "Darco2903",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/Darco2903/rt-stream.git"
+    "description": "Real Time Stream",
+    "keywords": [],
+    "license": "ISC",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "type": "module",
+    "packageManager": "pnpm@10.21.0",
+    "scripts": {
+        "build": "tsc",
+        "prepack": "pnpm build",
+        "test": "vitest",
+        "test:js-resolve": "node tests/jsResolve.js",
+        "test:ui": "vitest --ui",
+        "clean": "rimraf dist"
     },
-    "main": "index.js",
-    "types": "./index.d.ts",
-    "directories": {},
-    "scripts": {},
-    "keywords": []
+    "devDependencies": {
+        "@types/node": "^24.7.2",
+        "@vitest/ui": "^3.2.4",
+        "rimraf": "^6.0.1",
+        "tsx": "^4.20.6",
+        "typescript": "^5.9.3",
+        "vitest": "^3.2.4"
+    },
+    "dependencies": {
+        "rt-stream": "link:"
+    }
 }
