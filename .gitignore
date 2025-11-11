@@ -3,4 +3,4 @@ node_modules/
 dist/
 
 # tarballs
-re-stream-*.tgz
+rt-stream-*.tgz

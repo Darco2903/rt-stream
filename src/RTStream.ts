@@ -12,6 +12,7 @@ export class RTStream extends Transform {
     protected _sendTimeoutStart: number;
     protected _elapsedDelay: number;
     protected _paused: boolean;
+    // protected _ended: boolean;
 
     constructor(fd: number, bitrate: number, chunkSize: number = 32_000) {
         super();
@@ -25,6 +26,7 @@ export class RTStream extends Transform {
         this._sendTimeoutStart = 0;
         this._elapsedDelay = 0;
         this._paused = false;
+        // this._ended = false;
         this._stream(this._delay);
     }
 
@@ -36,6 +38,7 @@ export class RTStream extends Transform {
         this._sendTimeoutStart = Date.now();
         this._sendTimeout = setTimeout(async () => {
             await this._read();
+            // if (this._ended) return;
             this._send();
             // const elapsed = Date.now() - this.#sendTimeoutStart;
             // const diff = elapsed - delay;
@@ -62,6 +65,11 @@ export class RTStream extends Transform {
                 }
 
                 if (bytesRead !== 0) this.push(buffer);
+                // else if (!this._ended) {
+                //     this._ended = true;
+                //     // clearTimeout(this._sendTimeout);
+                //     this.emit("end");
+                // }
                 resolve();
             });
         });
@@ -96,5 +104,7 @@ export class RTStream extends Transform {
 
     public seek(offset: number): void {
         this._bytesSent = offset;
+        // if (this._ended) this._stream(this._delay);
+        // this._ended = false;
     }
 }

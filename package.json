@@ -15,7 +15,7 @@
         "test": "vitest",
         "test:js-resolve": "node tests/jsResolve.js",
         "test:ui": "vitest --ui",
-        "clean": "rimraf dist"
+        "clean": "rimraf -g dist rt-stream-*.tgz"
     },
     "devDependencies": {
         "@types/node": "^24.7.2",
