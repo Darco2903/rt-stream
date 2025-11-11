@@ -1,0 +1,8 @@
+.vscode/
+.gitattributes
+src/
+tests/
+tsconfig*.json
+
+# tarballs
+rt-stream-*.tgz
