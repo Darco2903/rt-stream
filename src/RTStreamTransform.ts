@@ -6,7 +6,6 @@ export class RTStreamTransform extends Transform {
     protected _sendTimeout: number;
     protected _sendTimeoutStart: number;
     protected _elapsedDelay: number;
-    protected _paused: boolean;
     protected _lastCall: Function | null;
 
     protected static _calculateDelay(chunkSize: number, bitrate: number): number {
@@ -20,7 +19,6 @@ export class RTStreamTransform extends Transform {
         this._sendTimeout = 0;
         this._sendTimeoutStart = 0;
         this._elapsedDelay = 0;
-        this._paused = false;
         this._lastCall = null;
     }
 
@@ -45,13 +43,12 @@ export class RTStreamTransform extends Transform {
     }
 
     public resume(): this {
-        if (!this._paused) {
+        if (!this.isPaused()) {
             // console.log("TRStream: already resumed");
             return super.resume();
         }
-        this._paused = false;
-        const remaining = this._delay - this._elapsedDelay;
 
+        const remaining = this._delay - this._elapsedDelay;
         if (this._lastCall) {
             this._sendTimeoutStart = Date.now() - this._elapsedDelay;
             this._sendTimeout = setTimeout(this._lastCall, remaining);
@@ -62,12 +59,11 @@ export class RTStreamTransform extends Transform {
     }
 
     public pause(): this {
-        if (this._paused) {
+        if (this.isPaused()) {
             // console.log("TRStream: already paused");
             return super.pause();
         }
 
-        this._paused = true;
         this._elapsedDelay += Date.now() - this._sendTimeoutStart;
         clearTimeout(this._sendTimeout);
         this._sendTimeout = 0;

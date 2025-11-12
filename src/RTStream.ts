@@ -88,15 +88,24 @@ export class RTStream {
     public seek(offset: number): void {
         const handlersByEvent = this.getListenersMap(this._rtStream);
 
+        const paused = this.paused;
         this.destroy();
 
         this._rtStream = this.initializeRTStream(offset);
         this.setListenersFromMap(this._rtStream, handlersByEvent);
+
+        if (paused) {
+            this._rtStream.pause();
+        }
     }
 
     public destroy(): void {
         this._rtStream.removeAllListeners();
         this._rtStream.unpipe();
         this._rtStream.destroy();
+    }
+
+    public get paused(): boolean {
+        return this._rtStream.isPaused();
     }
 }
