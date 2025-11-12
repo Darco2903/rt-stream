@@ -8,23 +8,22 @@ The purpose of this module is to provide a stream that acts like a media player 
 
 -   Read a file at the same speed as a media application would
 -   Pause and resume the stream
--   Seek to a specific position in the file (forwards and backwards)
+-   Seek to a specific position in the file
 
 ## Example
 
 ```js
-const fs = require("fs");
-const rtStream = require("rt-stream");
+import { RTStream } from "rt-stream";
 
 const bitrate = 320_000;
 const chunkSize = 32_000;
-const file = fs.openSync("audio-320kbps.mp3", "r");
+const filePath = "audio-320kbps.mp3";
 
-const rtStream = new rtStream(file, bitrate, chunkSize);
+const rtStream = new RTStream(filePath, bitrate, chunkSize);
 
 rtStream.seek(256_000); // Seek to 256_000 bytes
 
-rtStream.on("data", (chunk) => {
+rtStream.stream.on("data", (chunk) => {
     // Every 800ms (32_000 / (320_000 / 8) = 0.8s)
     console.log("Chunk size: " + chunk.length); // 32_000
 });

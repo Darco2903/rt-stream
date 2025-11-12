@@ -21,7 +21,7 @@ export class RTStream {
     }
 
     protected _rtStream: RTStreamTransform;
-    public get rtStream(): RTStreamTransform {
+    public get stream(): RTStreamTransform {
         return this._rtStream;
     }
 
