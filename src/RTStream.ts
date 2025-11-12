@@ -86,14 +86,17 @@ export class RTStream {
     }
 
     public seek(offset: number): void {
-        const currentStream = this._rtStream;
-        const handlersByEvent = this.getListenersMap(currentStream);
+        const handlersByEvent = this.getListenersMap(this._rtStream);
 
-        currentStream.removeAllListeners();
-        currentStream.unpipe();
-        currentStream.destroy();
+        this.destroy();
 
         this._rtStream = this.initializeRTStream(offset);
         this.setListenersFromMap(this._rtStream, handlersByEvent);
+    }
+
+    public destroy(): void {
+        this._rtStream.removeAllListeners();
+        this._rtStream.unpipe();
+        this._rtStream.destroy();
     }
 }
