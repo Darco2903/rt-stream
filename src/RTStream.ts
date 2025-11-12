@@ -62,8 +62,20 @@ export class RTStream {
     protected getListenersMap(stream: RTStreamTransform): HandlerMap {
         const handlersByEvent = new Map<string | symbol, Function[]>();
         for (const event of stream.eventNames()) {
-            handlersByEvent.set(event, stream.listeners(event));
+            const list = stream.listeners(event);
+            switch (event) {
+                case "close":
+                case "error":
+                case "prefinish":
+                case "finish":
+                case "drain":
+                case "unpipe":
+                    list.shift(); // remove first listener (usually internal)
+            }
+
+            handlersByEvent.set(event, list);
         }
+        // console.log("Current listeners:", handlersByEvent);
         return handlersByEvent;
     }
 
