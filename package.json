@@ -1,5 +1,5 @@
 {
-    "name": "rt-stream",
+    "name": "@darco2903/rt-stream",
     "version": "1.0.2",
     "author": "Darco2903",
     "description": "Real Time Stream",
@@ -8,11 +8,14 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "type": "module",
-    "packageManager": "pnpm@10.21.0",
+    "packageManager": "pnpm@10.25.0",
+    "publishConfig": {
+        "registry": "https://npm.pkg.github.com"
+    },
     "scripts": {
         "build": "tsc",
         "prepack": "pnpm build",
-        "clean": "rimraf -g dist rt-stream-*.tgz"
+        "clean": "rimraf -g dist darco2903-rt-stream-*.tgz"
     },
     "devDependencies": {
         "@types/node": "^24.7.2",

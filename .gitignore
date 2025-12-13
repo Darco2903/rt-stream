@@ -1,6 +1,11 @@
+# dev
 node_modules/
 .vscode/
+*_.*
+*_
+
+# build
 dist/
 
 # tarballs
-rt-stream-*.tgz
+darco2903-rt-stream-*.tgz

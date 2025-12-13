@@ -10,6 +10,20 @@ The purpose of this module is to provide a stream that acts like a media player 
 -   Pause and resume the stream
 -   Seek to a specific position in the file
 
+## Installation
+
+### Using npm
+
+```bash
+npm install @darco2903/rt-stream
+```
+
+### Using pnpm
+
+```bash
+pnpm add @darco2903/rt-stream
+```
+
 ## Example
 
 ```js

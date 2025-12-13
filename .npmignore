@@ -1,9 +1,15 @@
+# dev
 .vscode/
 .gitattributes
-.github/
-src/
+*_.*
+*_
 tests/
+temp_/
+TODO.md
+prettier.config.js
 tsconfig*.json
+src/
+.github/
 
 # tarballs
-rt-stream-*.tgz
+darco2903-rt-stream-*.tgz
