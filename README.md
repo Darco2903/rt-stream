@@ -6,28 +6,18 @@ The purpose of this module is to provide a stream that acts like a media player 
 
 ## Features
 
--   Read a file at the same speed as a media application would
--   Pause and resume the stream
--   Seek to a specific position in the file
+- Read a file at the same speed as a media application would
+- Pause and resume the stream
+- Seek to a specific position in the file
 
 ## Installation
 
-### Using npm
-
-```bash
-npm install @darco2903/rt-stream
-```
-
-### Using pnpm
-
-```bash
-pnpm add @darco2903/rt-stream
-```
+You can found the package here: [**@darco2903/rt-stream**](https://github.com/users/Darco2903/packages/npm/package/rt-stream)
 
 ## Example
 
-```js
-import { RTStream } from "rt-stream";
+```ts
+import { RTStream } from "@darco2903/rt-stream";
 
 const bitrate = 320_000;
 const chunkSize = 32_000;
@@ -38,7 +28,7 @@ const rtStream = new RTStream(filePath, bitrate, chunkSize);
 rtStream.seek(256_000); // Seek to 256_000 bytes
 
 rtStream.stream.on("data", (chunk) => {
-    // Every 800ms (32_000 / (320_000 / 8) = 0.8s)
+    // Every 800ms a chunk of 32_000 bytes will be emitted
     console.log("Chunk size: " + chunk.length); // 32_000
 });
 ```
