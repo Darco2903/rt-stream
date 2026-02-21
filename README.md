@@ -12,7 +12,7 @@ The purpose of this module is to provide a stream that acts like a media player 
 
 ## Installation
 
-You can found the package here: [**@darco2903/rt-stream**](https://github.com/users/Darco2903/packages/npm/package/rt-stream)
+You can find the package here: [**@darco2903/rt-stream**](https://github.com/users/Darco2903/packages/npm/package/rt-stream)
 
 ## Example
 
