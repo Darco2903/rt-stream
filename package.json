@@ -9,8 +9,11 @@
     "types": "dist/index.d.ts",
     "type": "module",
     "packageManager": "pnpm@10.25.0",
+    "repository": {
+        "url": "https://github.com/Darco2903/rt-stream.git"
+    },
     "publishConfig": {
-        "registry": "https://npm.pkg.github.com"
+        "access": "public"
     },
     "scripts": {
         "build": "tsc",
