@@ -6,8 +6,8 @@ on:
       - "v*" # Trigger on version tags
 
 permissions:
+  id-token: write
   contents: write
-  packages: write
 
 env:
   PNPM_VERSION: "10.25.0"
@@ -59,12 +59,9 @@ jobs:
   #       with:
   #         node-version: ${{ matrix.node-version }}
   #         cache: "pnpm"
-  #         registry-url: https://npm.pkg.github.com
 
   #     - name: Install dependencies
   #       run: pnpm install --frozen-lockfile
-  #       env:
-  #         NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
   #     - name: Run tests
   #       run: pnpm test
@@ -93,12 +90,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
-          registry-url: https://npm.pkg.github.com
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
       - name: Pack project
         run: pnpm pack
@@ -111,8 +105,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to GitHub Packages
+      - name: Publish to NPM
         shell: bash
         run: pnpm publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
