@@ -1,5 +1,5 @@
 import { Writable } from "stream";
-import { RTStream, type RTStreamOptions } from "../../src/index.js";
+import { RTStream, type RTChunk, type RTStreamOptions } from "../../src/index.js";
 import { FRAME_DURATION, frames, id3v2, tempDir } from "./helpers.js";
 
 const FRAME_MS = FRAME_DURATION * 1000;
@@ -82,6 +82,72 @@ describe("RTStream", () => {
         it("errors on a file without frames", async () => {
             const text = tmp.file("text.mp3", Buffer.from("definitely not audio"));
             await expect(play(text, {})).rejects.toThrow("No MPEG audio frames found");
+        });
+    });
+
+    describe("chunk event", () => {
+        it("gives each chunk's media time and duration", async () => {
+            const rt = new RTStream(vbrFile, { chunkSize: 1 });
+            const chunks: RTChunk[] = [];
+            const data: Buffer[] = [];
+            rt.on("chunk", (chunk) => chunks.push(chunk));
+            rt.on("data", (chunk: Buffer) => data.push(chunk));
+            await new Promise((resolve) => rt.on("end", resolve));
+
+            expect(chunks.map((c) => c.data)).toEqual(vbrFrames);
+            expect(chunks.map((c) => c.data)).toEqual(data);
+            chunks.forEach((c, k) => {
+                expect(c.time).toBeCloseTo(k * FRAME_DURATION);
+                expect(c.duration).toBeCloseTo(FRAME_DURATION);
+            });
+        });
+
+        it("restarts at the located time after a seek", async () => {
+            const times: number[] = [];
+            await play(vbrFile, { chunkSize: 1 }, (rt) => {
+                rt.on("chunk", ({ time }) => {
+                    times.push(time);
+                    if (times.length === 8) rt.seek(0.1); // frame 4 starts at 96ms
+                });
+            });
+
+            const expected = [0, 1, 2, 3, 4, 5, 6, 7, ...Array.from({ length: 16 }, (_, k) => k + 4)];
+            expect(times).toEqual(expected.map((k) => expect.closeTo(k * FRAME_DURATION)));
+        });
+
+        it("starts the flow on its own", async () => {
+            const rt = new RTStream(vbrFile, { chunkSize: 1, burst: 1 });
+            let count = 0;
+            rt.on("chunk", () => count++);
+            await new Promise((resolve) => rt.on("end", resolve));
+            expect(count).toBe(vbrFrames.length);
+        });
+
+        it("starts the flow with once()", async () => {
+            const rt = new RTStream(vbrFile, { chunkSize: 1 });
+            const first = await new Promise<RTChunk>((resolve) => rt.once("chunk", resolve));
+            expect(first.data).toEqual(vbrFrames[0]);
+            rt.destroy();
+        });
+    });
+
+    describe("chunkDuration", () => {
+        it("cuts mp3 chunks by duration", async () => {
+            const { chunks } = await play(vbrFile, { chunkDuration: 0.05, burst: 1 });
+
+            expect(chunks).toHaveLength(10);
+            chunks.forEach((chunk, k) => expect(chunk).toEqual(Buffer.concat(vbrFrames.slice(2 * k, 2 * k + 2))));
+        });
+
+        it("cuts constant bitrate chunks by duration", async () => {
+            const { chunks } = await play(rawFile, { bitrate: CBR.bitrate, chunkDuration: 0.025, burst: 1 });
+            expect(chunks.map((c) => c.length)).toEqual(Array(9).fill(50));
+        });
+
+        it("uses the smaller limit when chunkSize is set too", async () => {
+            const { chunks } = await play(vbrFile, { chunkDuration: 0.1, chunkSize: 1000, burst: 1 });
+            // 960 + 96 would pass 1000 bytes, 5 small frames would pass 0.1s
+            expect(chunks.map((c) => c.length)).toEqual([960, 960, 960, 960, 960, 96 * 4, 96 * 4, 96 * 4, 96 * 3]);
         });
     });
 
@@ -181,6 +247,7 @@ describe("RTStream", () => {
 
     it.each<[string, RTStreamOptions]>([
         ["chunkSize 0", { chunkSize: 0 }],
+        ["chunkDuration 0", { chunkDuration: 0 }],
         ["negative bitrate", { bitrate: -1 }],
         ["NaN burst", { burst: NaN }],
         ["negative start", { start: -1 }],

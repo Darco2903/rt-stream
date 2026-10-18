@@ -11,6 +11,7 @@ The purpose of this module is to provide a stream that acts like a media player 
 - Initial burst, so web clients can fill their buffer before real-time pacing starts
 - Stop and resume playback
 - Seek to a position in seconds
+- Chunk timestamps, to broadcast one stream to many clients
 
 ## Installation
 
@@ -45,12 +46,13 @@ http.createServer((req, res) => {
 
 ## Options
 
-| Option      | Default  | Description                                                                                                                                              |
-| ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bitrate`   | -        | Constant bitrate in bits per second, for any file type. Omit it for MP3 files: frames are then timed from their headers, which handles variable bitrate. |
-| `chunkSize` | `32_000` | Maximum bytes per chunk. MP3 chunks hold whole frames, at least one.                                                                                     |
-| `burst`     | `0`      | Seconds of media sent at once on start and after each seek.                                                                                              |
-| `start`     | `0`      | Start position in seconds.                                                                                                                               |
+| Option          | Default  | Description                                                                                                                                              |
+| --------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bitrate`       | -        | Constant bitrate in bits per second, for any file type. Omit it for MP3 files: frames are then timed from their headers, which handles variable bitrate. |
+| `chunkSize`     | `32_000` | Maximum bytes per chunk. MP3 chunks hold whole frames, at least one. The default only applies when `chunkDuration` isn't set.                            |
+| `chunkDuration` | -        | Maximum seconds per chunk. When both limits are set, chunks end at whichever is reached first. Short chunks (around `0.25`) keep latency low.            |
+| `burst`         | `0`      | Seconds of media sent at once on start and after each seek.                                                                                              |
+| `start`         | `0`      | Start position in seconds.                                                                                                                               |
 
 ## API
 
@@ -58,8 +60,37 @@ http.createServer((req, res) => {
 - `stop()` / `play()`: stops and resumes playback. These are separate from `pause()` / `resume()`, which are `Readable` flow control.
 - `playing`: whether playback is running.
 - `currentTime`: media time in seconds of the data sent so far, burst included.
+- `chunk` event: emitted right before each `data` event with `{ data, time, duration }`, where `time` is the media time the chunk starts at. Like `data`, listening to it starts the flow.
 
 ID3 tags and data between frames are not sent. If the client stalls, the stream catches up by sending the late chunks at once. `seek()` has no effect once the stream has ended.
+
+## Broadcasting to several clients
+
+Piping one stream into several responses lets the slowest client hold everyone back. Instead, write each chunk yourself, and replay the last seconds to clients that join late so they all start at the same point:
+
+```ts
+const stream = new RTStream("audio.mp3", { chunkDuration: 0.25, burst: 2 });
+const clients = new Set<http.ServerResponse>();
+const recent: RTChunk[] = []; // last 2 seconds, sent to clients joining late
+
+stream.on("chunk", (chunk) => {
+    if (recent.length && chunk.time < recent.at(-1)!.time) recent.length = 0; // seeked back
+    recent.push(chunk);
+    while (chunk.time - recent[0].time > 2) recent.shift();
+
+    for (const res of clients) {
+        if (res.writableLength > 64_000) res.destroy(); // too slow, drop it
+        else res.write(chunk.data);
+    }
+});
+
+http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "audio/mpeg" });
+    for (const chunk of recent) res.write(chunk.data);
+    clients.add(res);
+    res.on("close", () => clients.delete(res));
+});
+```
 
 ## Migrating from 1.x
 

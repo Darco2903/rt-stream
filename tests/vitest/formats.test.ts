@@ -2,12 +2,12 @@ import { ConstantBitrate, Mp3, type MediaFormat } from "../../src/formats.js";
 import { FRAME_DURATION, frame, frames, id3v2 } from "./helpers.js";
 
 /** Runs a format over a whole file, returning the chunks with their absolute offsets. */
-function drain(format: MediaFormat, file: Buffer, maxLength: number) {
+function drain(format: MediaFormat, file: Buffer, maxLength: number, maxDuration = Infinity) {
     const chunks: { offset: number; length: number; duration: number }[] = [];
     let position = 0;
     for (;;) {
         const buf = file.subarray(position, position + maxLength + format.lookahead);
-        const chunk = format.nextChunk(buf, maxLength, position + buf.length >= file.length);
+        const chunk = format.nextChunk(buf, maxLength, maxDuration, position + buf.length >= file.length);
         if (chunk.length === 0) {
             if (chunk.skip === 0) return chunks;
             position += chunk.skip;
@@ -28,6 +28,16 @@ describe("ConstantBitrate", () => {
             { offset: 100, length: 100, duration: 0.1 },
             { offset: 200, length: 50, duration: 0.05 },
         ]);
+    });
+
+    it("limits chunks by duration", () => {
+        const chunks = drain(new ConstantBitrate(8000), Buffer.alloc(250), 1000, 0.08);
+        expect(chunks.map((c) => c.length)).toEqual([80, 80, 80, 10]);
+    });
+
+    it("bounds the bytes of a duration", () => {
+        expect(new ConstantBitrate(8000).maxBytes(0.25)).toBe(250);
+        expect(new ConstantBitrate(8000).maxBytes(0)).toBe(1);
     });
 
     it("locates a time", async () => {
@@ -53,6 +63,26 @@ describe("Mp3", () => {
 
         expect(big.length).toBe(10 * small.length);
         expect(big.duration).toBe(small.duration);
+    });
+
+    it("groups whole frames up to maxDuration, whatever their size", () => {
+        const file = Buffer.concat(frames([320, 320, 32, 32, 32, 320, 32]));
+        const chunks = drain(new Mp3(), file, Infinity, 0.05);
+
+        expect(chunks.map((c) => c.length)).toEqual([960 * 2, 96 * 2, 96 + 960, 96]);
+        expect(chunks.map((c) => c.duration)).toEqual([2, 2, 2, 1].map((n) => expect.closeTo(n * FRAME_DURATION)));
+    });
+
+    it("ends chunks at whichever limit comes first", () => {
+        const file = Buffer.concat(frames([320, 320, 32, 32, 32, 32]));
+        const chunks = drain(new Mp3(), file, 1000, 0.1);
+
+        expect(chunks.map((c) => c.length)).toEqual([960, 960, 96 * 4]);
+    });
+
+    it("bounds the bytes of a duration for any bitrate", () => {
+        // 0.05s at 320 kbps is 2000 bytes, the bound must cover it
+        expect(new Mp3().maxBytes(0.05)).toBeGreaterThanOrEqual(2000 + 960);
     });
 
     it("sends at least one frame when maxLength is smaller", () => {

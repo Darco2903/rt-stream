@@ -16,6 +16,9 @@ export interface FrameHeader {
 /** Largest possible frame (MPEG-2 layer II, 160 kbps, 8 kHz, padded). */
 export const MAX_FRAME_LENGTH = 2881;
 
+/** Highest bitrate any layer allows (MPEG-1 layer I), in bits per second. */
+export const MAX_BITRATE = 448_000;
+
 // kbps, indexed by bitrate index (0 = free format, unsupported)
 const BITRATES = {
     v1l1: [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
