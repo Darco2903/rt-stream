@@ -8,6 +8,7 @@ on:
     pull_request:
         branches:
             - "main"
+    workflow_call:
 
 # A new push cancels the previous run of the same branch
 concurrency:
