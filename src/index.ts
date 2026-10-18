@@ -1,3 +1,2 @@
-export { RTStream } from "./RTStream.js";
-export { RTStreamTransform } from "./RTStreamTransform.js";
-export { FixedChunkTransform } from "./FixedChunkTransform.js";
+export { RTStream, type RTStreamOptions } from "./RTStream.js";
+export { parseFrameHeader, type FrameHeader } from "./mpeg.js";

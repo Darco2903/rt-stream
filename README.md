@@ -7,28 +7,64 @@ The purpose of this module is to provide a stream that acts like a media player 
 ## Features
 
 - Read a file at the same speed as a media application would
-- Pause and resume the stream
-- Seek to a specific position in the file
+- MP3 files are timed from their frame headers, so variable bitrate (VBR) files play at the right speed
+- Initial burst, so web clients can fill their buffer before real-time pacing starts
+- Stop and resume playback
+- Seek to a position in seconds
 
 ## Installation
 
-You can find the package here: [**@darco2903/rt-stream**](https://github.com/users/Darco2903/packages/npm/package/rt-stream)
+```sh
+npm install @darco2903/rt-stream
+```
 
 ## Example
 
 ```ts
 import { RTStream } from "@darco2903/rt-stream";
 
-const bitrate = 320_000;
-const chunkSize = 32_000;
-const filePath = "audio-320kbps.mp3";
+const stream = new RTStream("audio.mp3", { burst: 2 });
 
-const rtStream = new RTStream(filePath, bitrate, chunkSize);
+stream.on("data", (chunk) => {
+    // the first 2 seconds of audio arrive at once, then chunks follow at playback speed
+});
 
-rtStream.seek(256_000); // Seek to 256_000 bytes
+stream.seek(90); // jump to 1:30, sends a new burst
+stream.stop(); // stop playback
+stream.play(); // resume where it stopped
+```
 
-rtStream.stream.on("data", (chunk) => {
-    // Every 800ms a chunk of 32_000 bytes will be emitted
-    console.log("Chunk size: " + chunk.length); // 32_000
+`RTStream` is a `Readable`, so it can be piped, for example into an HTTP response:
+
+```ts
+http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "audio/mpeg" });
+    new RTStream("audio.mp3", { burst: 2 }).pipe(res);
 });
 ```
+
+## Options
+
+| Option      | Default  | Description                                                                                                                                              |
+| ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bitrate`   | -        | Constant bitrate in bits per second, for any file type. Omit it for MP3 files: frames are then timed from their headers, which handles variable bitrate. |
+| `chunkSize` | `32_000` | Maximum bytes per chunk. MP3 chunks hold whole frames, at least one.                                                                                     |
+| `burst`     | `0`      | Seconds of media sent at once on start and after each seek.                                                                                              |
+| `start`     | `0`      | Start position in seconds.                                                                                                                               |
+
+## API
+
+- `seek(time)`: jumps to `time` seconds and sends a new burst. MP3 seeks land on the frame starting at or before `time`.
+- `stop()` / `play()`: stops and resumes playback. These are separate from `pause()` / `resume()`, which are `Readable` flow control.
+- `playing`: whether playback is running.
+- `currentTime`: media time in seconds of the data sent so far, burst included.
+
+ID3 tags and data between frames are not sent. If the client stalls, the stream catches up by sending the late chunks at once. `seek()` has no effect once the stream has ended.
+
+## Migrating from 1.x
+
+- `new RTStream(path, bitrate, chunkSize)` becomes `new RTStream(path, { bitrate, chunkSize })`. Omit `bitrate` for MP3 files.
+- `rtStream.stream` is gone: the `RTStream` itself is the stream.
+- `seek()` takes seconds instead of bytes.
+- `pause()` / `resume()` for playback become `stop()` / `play()`.
+- `RTStreamTransform` and `FixedChunkTransform` are no longer exported.
