@@ -1,3 +1,4 @@
+import fs from "fs";
 import { Writable } from "stream";
 import { RTStream, type RTChunk, type RTStreamOptions } from "../../src/index.js";
 import { FRAME_DURATION, frames, id3v2, tempDir } from "./helpers.js";
@@ -217,6 +218,118 @@ describe("RTStream", () => {
             });
 
             expect(Buffer.concat(received)).toEqual(raw);
+        });
+    });
+
+    describe("growing file", () => {
+        // 150 frames of 960 bytes (144 KB, 3.6 s): more than a 64 KB seek scan block
+        const big = frames(Array(150).fill(320));
+        const GROWING = { chunkSize: 960, burst: 10, growing: true };
+        let count = 0;
+        const growingFile = (data: Buffer) => tmp.file(`growing-${count++}.mp3`, data);
+
+        function collect(rt: RTStream) {
+            const chunks: Buffer[] = [];
+            let ended = false;
+            rt.on("data", (chunk: Buffer) => chunks.push(chunk));
+            const end = new Promise<void>((resolve, reject) => {
+                rt.on("end", resolve);
+                rt.on("error", reject);
+            }).then(() => {
+                ended = true;
+            });
+            return { chunks, end, ended: () => ended };
+        }
+
+        it("waits at the written end instead of ending, until complete()", async () => {
+            const file = growingFile(Buffer.concat(big.slice(0, 30)));
+            const rt = new RTStream(file, GROWING);
+            const { chunks, end, ended } = collect(rt);
+
+            await sleep(150);
+            expect(chunks.length).toBeGreaterThan(0);
+            // the last frames wait for the lookahead
+            expect(chunks.length).toBeLessThan(30);
+            expect(ended()).toBe(false);
+
+            fs.appendFileSync(file, Buffer.concat(big.slice(30)));
+            await sleep(150);
+            expect(ended()).toBe(false);
+
+            rt.complete();
+            await end;
+            expect(chunks).toEqual(big);
+        });
+
+        it("starts on a file still empty", async () => {
+            const file = growingFile(Buffer.alloc(0));
+            const rt = new RTStream(file, GROWING);
+            const { chunks, end } = collect(rt);
+
+            await sleep(150);
+            expect(chunks).toEqual([]);
+
+            fs.appendFileSync(file, Buffer.concat(big));
+            rt.complete();
+            await end;
+            expect(chunks).toEqual(big);
+        });
+
+        it("seeks past the written part once it is there", async () => {
+            const file = growingFile(Buffer.concat(big.slice(0, 100)));
+            const rt = new RTStream(file, { ...GROWING, start: 3.01 }); // frame 125 starts at 3s
+            const { chunks, end } = collect(rt);
+
+            await sleep(150);
+            expect(chunks).toEqual([]);
+
+            fs.appendFileSync(file, Buffer.concat(big.slice(100)));
+            rt.complete();
+            await end;
+            expect(chunks).toEqual(big.slice(125));
+        });
+
+        it("drops a seek waiting for data when seeking again", async () => {
+            const file = growingFile(Buffer.concat(big.slice(0, 100)));
+            const rt = new RTStream(file, { ...GROWING, start: 3.01 });
+            const { chunks, end } = collect(rt);
+
+            await sleep(150);
+            rt.seek(0);
+            await sleep(150);
+            expect(chunks[0]).toEqual(big[0]);
+
+            fs.appendFileSync(file, Buffer.concat(big.slice(100)));
+            rt.complete();
+            await end;
+            expect(chunks).toEqual(big);
+        });
+
+        it("closes when destroyed while waiting", async () => {
+            const rt = new RTStream(growingFile(Buffer.concat(big.slice(0, 30))), GROWING);
+            const errors: Error[] = [];
+            rt.on("error", (err) => errors.push(err));
+            rt.resume();
+            await sleep(150);
+
+            const closed = new Promise((resolve) => rt.on("close", resolve));
+            rt.destroy();
+            await closed;
+            expect(errors).toEqual([]);
+        });
+
+        it("reports whether the file is still growing", () => {
+            const fixed = new RTStream(vbrFile);
+            expect(fixed.growing).toBe(false);
+            fixed.complete();
+            expect(fixed.growing).toBe(false);
+            fixed.destroy();
+
+            const rt = new RTStream(vbrFile, { growing: true });
+            expect(rt.growing).toBe(true);
+            rt.complete();
+            expect(rt.growing).toBe(false);
+            rt.destroy();
         });
     });
 

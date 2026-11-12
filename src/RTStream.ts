@@ -19,7 +19,18 @@ export interface RTStreamOptions {
     burst?: number;
     /** Start position in seconds, default 0. */
     start?: number;
+    /**
+     * The file is still being written: reads wait for its data instead of ending,
+     * until `complete()` is called. Default false.
+     */
+    growing?: boolean;
 }
+
+/** How often the size of a growing file is checked while waiting for its data, in ms. */
+const GROWTH_POLL = 100;
+
+/** Thrown by a read made stale by a seek or destroy while it waited for a growing file. */
+class StaleRead extends Error {}
 
 export interface RTChunk {
     data: Buffer;
@@ -47,6 +58,7 @@ export class RTStream extends Readable {
     private fh?: FileHandle;
     private position = 0; // file offset of the next chunk
     private seekTarget: number | null = null;
+    private writing: boolean; // the file is still growing
 
     private mediaStart = 0; // media time at which the playback clock started
     private mediaSent = 0; // media seconds sent since the clock started
@@ -56,7 +68,10 @@ export class RTStream extends Readable {
     private generation = 0; // bumped by seek() to discard in-flight reads
     private wake?: () => void;
 
-    constructor(path: string, { bitrate, chunkSize, chunkDuration, burst = 0, start = 0 }: RTStreamOptions = {}) {
+    constructor(
+        path: string,
+        { bitrate, chunkSize, chunkDuration, burst = 0, start = 0, growing = false }: RTStreamOptions = {},
+    ) {
         if (bitrate !== undefined && !(bitrate > 0 && Number.isFinite(bitrate))) {
             throw new RangeError("RTStream: bitrate must be a positive number");
         }
@@ -75,6 +90,7 @@ export class RTStream extends Readable {
         this.chunkSize = chunkSize;
         this.chunkDuration = chunkDuration;
         this.burst = burst;
+        this.writing = growing;
         this.format = bitrate === undefined ? new Mp3() : new ConstantBitrate(bitrate);
         this.maxDuration = chunkDuration ?? Infinity;
         this.maxLength = Math.min(chunkSize ?? Infinity, this.format.maxBytes(this.maxDuration));
@@ -91,6 +107,18 @@ export class RTStream extends Readable {
 
     public get playing(): boolean {
         return this.pausedAt === null;
+    }
+
+    /** Whether the file is still being written, see the `growing` option. */
+    public get growing(): boolean {
+        return this.writing;
+    }
+
+    /** The growing file won't change anymore: reads stop waiting and the stream ends at its end. */
+    public complete(): void {
+        if (!this.writing) return;
+        this.writing = false;
+        this.kick();
     }
 
     /** Stops playback. Unrelated to `pause()`, which is Readable flow control. */
@@ -142,12 +170,13 @@ export class RTStream extends Readable {
     }
 
     override async _read(): Promise<void> {
-        try {
-            for (;;) {
+        for (;;) {
+            try {
                 const generation = this.generation;
+                const readAt = (position: number, length: number) => this.readAt(position, length, generation);
 
                 if (this.seekTarget !== null) {
-                    const { position, time } = await this.format.locate(this.seekTarget, this.readAt);
+                    const { position, time } = await this.format.locate(this.seekTarget, readAt);
                     if (this.destroyed) return;
                     if (generation !== this.generation) continue;
 
@@ -158,7 +187,7 @@ export class RTStream extends Readable {
                 }
 
                 const size = this.maxLength + this.format.lookahead;
-                const buf = await this.readAt(this.position, size);
+                const buf = await readAt(this.position, size);
                 if (this.destroyed) return;
                 if (generation !== this.generation) continue;
 
@@ -184,9 +213,12 @@ export class RTStream extends Readable {
                 this.emit("chunk", { data, time, duration: chunk.duration } satisfies RTChunk);
                 this.push(data);
                 return;
+            } catch (err) {
+                if (this.destroyed) return;
+                if (err instanceof StaleRead) continue;
+                this.destroy(err as Error);
+                return;
             }
-        } catch (err) {
-            if (!this.destroyed) this.destroy(err as Error);
         }
     }
 
@@ -201,12 +233,30 @@ export class RTStream extends Readable {
         );
     }
 
-    private readAt = async (position: number, length: number): Promise<Buffer> => {
+    /**
+     * Reads `length` bytes at `position`, fewer only at the end of the file.
+     * A growing file is waited for, so formats never mistake its current end for the real one.
+     */
+    private async readAt(position: number, length: number, generation: number): Promise<Buffer> {
+        if (this.writing) await this.waitForData(position + length, generation);
         if (!this.fh) throw new Error("RTStream: file is closed");
         const buf = Buffer.allocUnsafe(length);
         const { bytesRead } = await this.fh.read(buf, 0, length, position);
         return bytesRead === length ? buf : buf.subarray(0, bytesRead);
-    };
+    }
+
+    /** Waits until the growing file reaches `end` bytes or is complete. Throws StaleRead after a seek or destroy. */
+    private async waitForData(end: number, generation: number): Promise<void> {
+        for (;;) {
+            if (this.destroyed || generation !== this.generation) throw new StaleRead();
+            if (!this.writing) return;
+            if (!this.fh) throw new Error("RTStream: file is closed");
+            const { size } = await this.fh.stat();
+            if (size >= end) return;
+            if (this.destroyed || generation !== this.generation) throw new StaleRead();
+            await this.sleep(GROWTH_POLL);
+        }
+    }
 
     private restartClock(time: number): void {
         this.mediaStart = time;
@@ -226,14 +276,19 @@ export class RTStream extends Readable {
                 if (delay <= 0) return;
             }
 
-            await new Promise<void>((resolve) => {
-                const timer = delay === Infinity ? undefined : setTimeout(resolve, delay);
-                this.wake = () => {
-                    clearTimeout(timer);
-                    resolve();
-                };
-            });
+            await this.sleep(delay);
         }
+    }
+
+    /** Resolves after `delay` ms (Infinity: never), or earlier on kick(). */
+    private sleep(delay: number): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const timer = delay === Infinity ? undefined : setTimeout(resolve, delay);
+            this.wake = () => {
+                clearTimeout(timer);
+                resolve();
+            };
+        });
     }
 
     private kick(): void {

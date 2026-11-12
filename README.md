@@ -53,6 +53,7 @@ http.createServer((req, res) => {
 | `chunkDuration` | -        | Maximum seconds per chunk. When both limits are set, chunks end at whichever is reached first. Short chunks (around `0.25`) keep latency low.            |
 | `burst`         | `0`      | Seconds of media sent at once on start and after each seek.                                                                                              |
 | `start`         | `0`      | Start position in seconds.                                                                                                                               |
+| `growing`       | `false`  | The file is still being written. Reads wait for its data instead of ending, until `complete()` is called. See [Growing files](#growing-files).           |
 
 ## API
 
@@ -60,9 +61,24 @@ http.createServer((req, res) => {
 - `stop()` / `play()`: stops and resumes playback. These are separate from `pause()` / `resume()`, which are `Readable` flow control.
 - `playing`: whether playback is running.
 - `currentTime`: media time in seconds of the data sent so far, burst included.
+- `complete()`: tells a growing file is done, the stream then ends at its end.
+- `growing`: whether the file is still being written.
 - `chunk` event: emitted right before each `data` event with `{ data, time, duration }`, where `time` is the media time the chunk starts at. Like `data`, listening to it starts the flow.
 
 ID3 tags and data between frames are not sent. If the client stalls, the stream catches up by sending the late chunks at once. `seek()` has no effect once the stream has ended.
+
+## Growing files
+
+A file can be played while it is still being written, for example by a download or an encoder. The file must exist when the stream starts, even empty:
+
+```ts
+const stream = new RTStream("download.mp3.part", { burst: 2, growing: true });
+
+download.on("end", () => stream.complete());
+download.on("error", (err) => stream.destroy(err));
+```
+
+Reads wait for the bytes they need, so playback stays a few kilobytes behind the writer. A seek past the written part waits until it is written, and a later seek replaces it. If the writer fails, destroy the stream, it would wait forever otherwise.
 
 ## Broadcasting to several clients
 
